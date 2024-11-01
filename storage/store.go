@@ -60,6 +60,25 @@ func (s *Store) Get(key string) ([]float64, bool) {
 	return nil, false
 }
 
+func (s *Store) Flush() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.Memtable.Size() > 0 {
+		err := s.Memtable.flushToDisk(s.DestDir)
+		if err != nil {
+			return fmt.Errorf("could not Flush memtable data to Disk: %v", err)
+		}
+		s.Memtable.Clear()
+		err = s.loadNewSSTable()
+		if err != nil {
+			return fmt.Errorf("could not load SSTable: %v", err)
+		}
+	}
+
+	return nil
+}
+
 func (s *Store) loadNewSSTable() error {
 	files, err := filepath.Glob(filepath.Join(s.DestDir, "*.sst"))
 	if err != nil {
