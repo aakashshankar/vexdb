@@ -21,7 +21,6 @@ func NewBertTokenize() *BertTokenize {
 }
 
 func (bt *BertTokenize) encode(input string) ([]int, error) {
-	fmt.Printf("Trying to encode %s\n", input)
 	encoding, err := bt.tk.EncodeSingle(input, true)
 
 	if err != nil {

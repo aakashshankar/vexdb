@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	openai_max_tokens = 8191
+	openaiMaxTokens    = 8191
+	sixtyFourMegabytes = 64 * 1024 * 1024
 )
 
 var embedCmd = &cobra.Command{
@@ -41,7 +42,7 @@ var embedCmd = &cobra.Command{
 			return fmt.Errorf("error initializing embedder: %w", err)
 		}
 		// FATAL: Will not flush to disk if data is less
-		store := storage.NewStore(1, destPath)
+		store := storage.NewStore(sixtyFourMegabytes, destPath)
 
 		err = filepath.Walk(sourceDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -67,21 +68,23 @@ var embedCmd = &cobra.Command{
 					}
 				}
 
-				fmt.Printf("extracted content: %s\n", content)
-
 				err = embedContentAndStore(embedder, content, path, store)
 
 				if err != nil {
 					return err
 				}
 
-				fmt.Printf("Generated and stored embeddings for %s\n", path)
 			}
 			return nil
 		})
 
 		if err != nil {
 			return fmt.Errorf("error processing files in %s: %w", sourceDir, err)
+		}
+
+		err = store.Flush()
+		if err != nil {
+			return fmt.Errorf("failed to Flush final Memtable data to disk: %v", err)
 		}
 
 		fmt.Printf("Embeddings in %s stored at %s\n", sourceDir, destPath)
@@ -93,7 +96,7 @@ var embedCmd = &cobra.Command{
 func embedContentAndStore(embedder embed.Embedder, content string, path string, store *storage.Store) error {
 	tokenizer := bert.NewBertTokenize()
 
-	chunks, err := tokenizer.SplitTokens(content, openai_max_tokens)
+	chunks, err := tokenizer.SplitTokens(content, openaiMaxTokens)
 	if err != nil {
 		return err
 	}

@@ -11,7 +11,7 @@ import (
 )
 
 type Memtable struct {
-	Data    map[string][]byte
+	Data    *SkipList
 	lock    sync.RWMutex
 	maxSize int
 	size    int
@@ -19,7 +19,7 @@ type Memtable struct {
 
 func NewMemtable(maxSize int) *Memtable {
 	return &Memtable{
-		Data:    make(map[string][]byte),
+		Data:    NewSkipList(),
 		maxSize: maxSize,
 		size:    0,
 	}
@@ -39,23 +39,20 @@ func (m *Memtable) Put(key string, vector []float64, destPath string) error {
 		}
 	}
 
-	_, exists := m.Data[key]
+	fmt.Printf("vectoer is serialized for memtable: %v", value)
+	_, exists := m.Data.Search(key)
 	if !exists {
 		m.size++
 	}
 
-	if err != nil {
-		return fmt.Errorf("could not write data into memtable: %v", err)
-	}
-
-	m.Data[key] = value
+	m.Data.Insert(key, value)
 
 	if m.size >= m.maxSize {
 		err := m.flushToDisk(destPath)
 		if err != nil {
 			return fmt.Errorf("could not flush memtable to disk: %v", err)
 		}
-		m.clear()
+		m.Clear()
 	}
 
 	return nil
@@ -73,7 +70,7 @@ func (m *Memtable) Get(key string) ([]float64, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	value, exists := m.Data[key]
+	value, exists := m.Data.Search(key)
 	if !exists {
 		return nil, false
 	}
@@ -121,12 +118,13 @@ func (m *Memtable) flushToDisk(destPath string) error {
 
 		}
 	}(file)
-
-	for key, val := range m.Data {
-		err := writeRecord(file, key, val)
+	current := m.Data.head.next[0]
+	for current != nil {
+		err := writeRecord(file, current.key, current.value)
 		if err != nil {
 			return fmt.Errorf("could not write record: %v", err)
 		}
+		current = current.next[0]
 	}
 
 	err = os.Rename(tempFilename, filename)
@@ -161,7 +159,7 @@ func writeRecord(file *os.File, key string, value []byte) error {
 	return nil
 }
 
-func (m *Memtable) clear() {
-	m.Data = make(map[string][]byte)
+func (m *Memtable) Clear() {
+	m.Data = NewSkipList()
 	m.size = 0
 }
