@@ -3,3 +3,5 @@ bin/
 emb_samples/
 .aider*
 .env
+
+.DS_Store
